@@ -18,9 +18,7 @@ class Paths:
         It creates Path objects until every neighbor has been connected.
         """
         paths = Paths([])
-        print(len(list(points)))
-        for i, point in enumerate(points):
-            print(i)
+        for point in points:
             made_path = True
             while made_path:
                 made_path = False
@@ -28,7 +26,6 @@ class Paths:
                 if len(list(path)) > 1:
                     paths.add_path(path)
                     made_path = True
-                    print("Created path")
         return paths
 
     def visualize(self, background_img, line_color, start_color = None):
@@ -129,8 +126,8 @@ class Path:
         Creates a path that goes through neighboring points.
         It simply chooses the first available neighbor repeatedly to create a list.
         It does not guarentee that every point will be crossed by the path.
-        An optional start_point argument can be given to define the start point, if not the first will be used.
-        Also accepts an optional explore_path argument which should be a Paths objects. It will prevent making any connections that are already present in one of these paths.
+        An optional start_point parameter can be given to define the start point, if not the first will be used.
+        Also accepts an optional explore_path parameter which should be a Paths objects. It will prevent making any connections that are already present in one of these paths.
         """
         if start_point == None:
             start_point = list(points)[0]
@@ -176,6 +173,9 @@ class Path:
             if i % math.ceil(point_count/MAX_GIF_LINE_FRAMES) == 0:
                 frames.append(background_img.copy())
         return frames
+
+    def get_first_point(self):
+        return self._point_list[0]
 
     def has_connection(self, point_a, point_b):
         for i in range(len(self._point_list) - 1):
