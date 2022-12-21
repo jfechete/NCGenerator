@@ -22,7 +22,7 @@ class Paths:
             made_path = True
             while made_path:
                 made_path = False
-                path = Path.path_from_points(points, start_point = point, explored_paths = paths)
+                path = Path.path_from_points(points, start_point = point, explored_paths = paths, allow_loop = True)
                 if len(list(path)) > 1:
                     paths.add_path(path)
                     made_path = True
@@ -121,13 +121,14 @@ class Path:
         self._point_list = point_list
 
     @staticmethod
-    def path_from_points(points, start_point = None, explored_paths = None):
+    def path_from_points(points, start_point = None, explored_paths = None, allow_loop = False):
         """
         Creates a path that goes through neighboring points.
         It simply chooses the first available neighbor repeatedly to create a list.
         It does not guarentee that every point will be crossed by the path.
         An optional start_point parameter can be given to define the start point, if not the first will be used.
         Also accepts an optional explore_path parameter which should be a Paths objects. It will prevent making any connections that are already present in one of these paths.
+        Also can set allow_loop to True to allow it to end on the same point it started if that's where the path ends up.
         """
         if start_point == None:
             start_point = list(points)[0]
@@ -142,6 +143,8 @@ class Path:
                         path.append(point_exploring)
                         found_connection = True
                         break
+            if not found_connection and path[-1].is_neighbor(start_point):
+                path.append(start_point)
         return Path(path)
                     
 
