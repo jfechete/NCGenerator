@@ -15,7 +15,6 @@ def main():
     points = data_classes.Points.from_binary_image(image)
     
     paths = data_classes.Paths.paths_from_points(points)
-    paths.visualize(image, PATH_VISUALIZE_COLOR, PATH_VISUALIZE_FIRST_COLOR)
 
     nc_generator = generator.Generator(SIZE/max(image.size))
     nc_generator.add_multipass(paths, DEPTH)

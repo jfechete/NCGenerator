@@ -3,8 +3,7 @@ M3 S{s_speed}
 G90
 G0 Z{hover_height}
 G0 X0.000 Y0.000"""
-POST_CODE = """
-G0 Z{hover_height}
+POST_CODE = """G0 Z{hover_height}
 G0 X0.000 Y0.000
 M5
 M30"""
@@ -15,6 +14,7 @@ VERTICAL_SPEED = 250
 HORIZONTAL_SPEED = 750
 DEPTH_STEP = 0.5
 FLOAT_PRECISION = 3
+MIN_MOVE_DIST = 0.25
 
 class Generator:
     def __init__(self, mm_ratio):
@@ -45,17 +45,17 @@ class Generator:
         for path in paths:
             path_code = "G0 Z{hover_height}\n".format(hover_height=HOVER_HEIGHT)
             start = path.get_first_point()
-            path_code += "G0 X{x} Y{y}\n".format(
-                x=round(start.x * self._mm_ratio, FLOAT_PRECISION),
-                y=round(start.y * self._mm_ratio, FLOAT_PRECISION)
-            )
+            last_pos = (self._get_mm_pos(start.x), self._get_mm_pos(start.y))
+            path_code += "G0 X{x} Y{y}\n".format(x=last_pos[0],y=last_pos[1])
             path_code += "G1 Z-{depth} F{speed}\n".format(depth=depth, speed=VERTICAL_SPEED)
             path_code += "G1 F{speed}\n".format(speed=HORIZONTAL_SPEED)
             for point in path:
-                path_code += "G1 X{x} Y{y}\n".format(
-                    x=round(point.x * self._mm_ratio, FLOAT_PRECISION),
-                    y=round(point.y * self._mm_ratio, FLOAT_PRECISION)
-                )
+                cur_pos = (self._get_mm_pos(point.x), self._get_mm_pos(point.y))
+                if self._is_move_far(last_pos, cur_pos):
+                    path_code += "G1 X{x} Y{y}\n".format(x=cur_pos[0],y=cur_pos[1])
+                    last_pos = cur_pos
+            if last_pos != cur_pos:
+                path_code += "G1 X{x} Y{y}\n".format(x=cur_pos[0],y=cur_pos[1])
             path_code += "G0 Z{hover_height}\n".format(hover_height=HOVER_HEIGHT)
 
             self._move_code += path_code
@@ -72,3 +72,9 @@ class Generator:
             nc_file.write(self._pre_code)
             nc_file.write(self._move_code)
             nc_file.write(self._post_code)
+
+    def _is_move_far(self, pos_a, pos_b):
+        return (pos_a[0]-pos_b[0])**2 + (pos_a[1]-pos_b[1])**2 >= MIN_MOVE_DIST**2
+
+    def _get_mm_pos(self, pixel_pos):
+        return round(pixel_pos* self._mm_ratio, FLOAT_PRECISION)
