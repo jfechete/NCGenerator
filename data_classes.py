@@ -69,32 +69,32 @@ class Points:
         self._point_list = point_list
 
     @staticmethod
-    def from_binary_image(pil_img):
+    def from_image_color_edge(pil_img):
         """
-        Returns a Points object showing the outline of the white objects in this picture.
-        The inner border is used, every point will be on a white pixel.
+        Returns a Points object showing the outline all color edges in the image.
+        The border is on the side with the brighter color.
+        In order to get the brighter color, the image is converted to grayscale. If two color convert to the same grayscale color, edges won't be detected.
         """
-        if pil_img.mode != "1":
-            pil_img = pil_img.convert("1")
+        if pil_img.mode != "L":
+            pil_img = pil_img.convert("L")
 
         point_list = []
         for x in range(pil_img.width):
             for y in range(pil_img.height):
                 color = pil_img.getpixel((x,y))
-                if color > 0:
-                    neighs = (
-                        (x+1, y),
-                        (x-1, y),
-                        (x, y+1),
-                        (x, y-1)
-                    )
-                    for neigh in neighs:
-                        if (neigh[0] >= 0 and neigh[0] < pil_img.width and
-                            neigh[1] >= 0 and neigh[1] < pil_img.height):
-                            neigh_color = pil_img.getpixel(neigh)
-                            if neigh_color == 0:
-                                point_list.append(Point(x, y))
-                                break
+                neighs = (
+                    (x+1, y),
+                    (x-1, y),
+                    (x, y+1),
+                    (x, y-1)
+                )
+                for neigh in neighs:
+                    if (neigh[0] >= 0 and neigh[0] < pil_img.width and
+                        neigh[1] >= 0 and neigh[1] < pil_img.height):
+                        neigh_color = pil_img.getpixel(neigh)
+                        if neigh_color < color:
+                            point_list.append(Point(x, y))
+                            break
 
         return Points(point_list)
 
