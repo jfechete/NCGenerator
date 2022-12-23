@@ -14,7 +14,7 @@ def main():
     image = Image.open(INPUT_FILE)
     points = data_classes.Points.from_image_color_edge(image)
     
-    paths = data_classes.Paths.paths_from_points(points)
+    paths = data_classes.Paths.paths_from_points(points, min_path_length = 7)
 
     nc_generator = generator.Generator(SIZE/max(image.size))
     nc_generator.add_multipass(paths, DEPTH)

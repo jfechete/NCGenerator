@@ -12,20 +12,48 @@ class Paths:
         self._path_list = path_list
 
     @staticmethod
-    def paths_from_points(points):
+    def paths_from_points(points, min_path_length = 2):
         """
         Creates a Paths that goes through neighboring points.
         It creates Path objects until every neighbor has been connected.
+        Also accepts a min_path_length parameter that must be at least 2. Any paths smaller than this are not added. This is used because sometimes 2 Path objects can get close to each other, but never actually connect, so many small Path objects are created to connect them, which may not be desirable since the difference may not be noticeable but add more CNC cutting time.
         """
+        if min_path_length < 2:
+            raise ValueError("Parameter min_path_length must be at least 2")
         paths = Paths([])
+
+        unexpandable_points = []
         for point in points:
-            made_path = True
-            while made_path:
-                made_path = False
-                path = Path.path_from_points(points, start_point = point, explored_paths = paths, allow_loop = True)
-                if len(list(path)) > 1:
+            if point in unexpandable_points:
+                continue
+
+            #explore current Point in Points
+            path, cur_expandable, cur_unexpandable = Path.path_from_points(
+                points, start_point = point,
+                explored_paths = paths, allow_loop = True,
+                return_affected_points = True
+            )
+            if len(path) > 1:
+                paths.add_path(path)
+            unexpandable_points += [p for p in cur_unexpandable if p not in unexpandable_points]
+            expandable_points = [p for p in cur_expandable if p not in unexpandable_points]
+
+            #explore any possible branches from that point
+            while len(expandable_points) > 0:
+                cur_point = expandable_points.pop(0)
+                path, cur_expandable, cur_unexpandable = Path.path_from_points(
+                    points, start_point = cur_point,
+                    explored_paths = paths, allow_loop = True,
+                    return_affected_points = True
+                )
+                if len(path) > 1:
                     paths.add_path(path)
-                    made_path = True
+                unexpandable_points += [p for p in cur_unexpandable if p not in unexpandable_points]
+                expandable_points += [p for p in cur_expandable if p not in expandable_points]
+                expandable_points = [p for p in expandable_points if p not in unexpandable_points]
+
+        #need to filter at the end so that if a connection was found in a small Path, it doesn't infinite loop for not saving that Path
+        paths = Paths([path for path in paths if len(path) >= min_path_length])
         return paths
 
     def visualize(self, background_img, line_color, start_color = None):
@@ -55,9 +83,9 @@ class Paths:
         """
         self._path_list.append(path)
 
-    def has_connection(self, point_a, point_b):
+    def has_connection(self, point_a, point_b, max_dist = 1):
         for path in self:
-            if path.has_connection(point_a, point_b):
+            if path.has_connection(point_a, point_b, max_dist):
                 return True
         return False
 
@@ -113,6 +141,12 @@ class Points:
         for point in self:
             point.apply_to_img(background_img, color)
 
+    def __contains__(self, point):
+        return point in self._point_list
+
+    def __len__(self):
+        return len(self._point_list)
+
     def __iter__(self):
         return iter(self._point_list)
 
@@ -121,7 +155,7 @@ class Path:
         self._point_list = point_list
 
     @staticmethod
-    def path_from_points(points, start_point = None, explored_paths = None, allow_loop = False):
+    def path_from_points(points, start_point = None, explored_paths = None, allow_loop = False, return_affected_points = False):
         """
         Creates a path that goes through neighboring points.
         It simply chooses the first available neighbor repeatedly to create a list.
@@ -129,24 +163,56 @@ class Path:
         An optional start_point parameter can be given to define the start point, if not the first will be used.
         Also accepts an optional explore_path parameter which should be a Paths objects. It will prevent making any connections that are already present in one of these paths.
         Also can set allow_loop to True to allow it to end on the same point it started if that's where the path ends up.
+        Also can set return_affected_points to True, which means that along with the Path object it will return 2 Points showing all the points in the path. The first shows Point objects that still have unexplored neighbors, while the second shows Point objects that have no unexplored neighbors. Not 100% reliable, as if a point has an unexplored neighbor that is explored later in the path, it will not be moved to the second list.
         """
         if start_point == None:
             start_point = list(points)[0]
         
         path = [start_point]
         found_connection = True
+        if return_affected_points:
+            expandable_points = []
+            unexpandable_points = []
         while found_connection:
-            found_connection = False
-            for point_exploring in points:
-                if path[-1].is_neighbor(point_exploring) and point_exploring not in path:
-                    if explored_paths == None or not explored_paths.has_connection(path[-1], point_exploring):
-                        path.append(point_exploring)
-                        found_connection = True
-                        break
+            neighbors = []
+            adjacents = []
+            for j, point_exploring in enumerate(points):
+                if (
+                    path[-1].is_neighbor(point_exploring) and
+                    point_exploring not in path and
+                    # allows distance of 2 so that corners don't connect both the corner piece and diagonal connection.
+                    (explored_paths == None or not explored_paths.has_connection(path[-1], point_exploring, 2))
+                    ):
+                    if path[-1].is_adjacent(point_exploring):
+                        adjacents.append(point_exploring)
+                        if not return_affected_points:
+                            break
+                    else:
+                        neighbors.append(point_exploring)
+
+            #prioritize adjacent cells to avoid path skipping corners and leaving single points behind
+            if len(adjacents) > 0:
+                path.append(adjacents.pop())
+            elif len(neighbors) > 0:
+                path.append(neighbors.pop())
+            else:
+                found_connection = False
+
+            if return_affected_points:
+                if not found_connection:
+                    unexpandable_points.append(path[-1])
+                elif len(adjacents + neighbors) > 0:
+                    expandable_points.append(path[-2])
+                else:
+                    unexpandable_points.append(path[-2])
+
             if not found_connection and path[-1].is_neighbor(start_point):
                 path.append(start_point)
-        return Path(path)
-                    
+
+        if return_affected_points:
+            return Path(path), Points(expandable_points), Points(unexpandable_points)
+        else:
+            return Path(path)
 
     def visualize(self, background_img, line_color, start_color = None):
         """
@@ -167,7 +233,7 @@ class Path:
         if start_color == None:
             start_color = line_color
 
-        point_count = len(list(self))
+        point_count = len(self)
         frames = []
         for i, point in enumerate(self):
             point.apply_to_img(
@@ -180,12 +246,22 @@ class Path:
     def get_first_point(self):
         return self._point_list[0]
 
-    def has_connection(self, point_a, point_b):
-        for i in range(len(self._point_list) - 1):
-            if (self._point_list[i] == point_a and self._point_list[i+1] == point_b or
-                self._point_list[i] == point_b and self._point_list[i+1] == point_a):
-                return True
+    def has_connection(self, point_a, point_b, max_dist = 1):
+        for i in range(len(self._point_list)):
+            if self._point_list[i] == point_a or self._point_list[i] == point_b:
+                for j in range(1, max_dist + 1):
+                    if (
+                        (self._point_list[i] == point_a and self._point_list[(i+j)%len(self._point_list)] == point_b) or
+                        (self._point_list[i] == point_b and self._point_list[(i+j)%len(self._point_list)] == point_a)
+                        ):
+                        return True
         return False
+
+    def __contains__(self, point):
+        return point in self._point_list
+
+    def __len__(self):
+        return len(self._point_list)
 
     def __iter__(self):
         return iter(self._point_list)
@@ -199,6 +275,12 @@ class Point:
 
     def is_neighbor(self, other):
         return abs(self.x - other.x) <= 1 and abs(self.y - other.y) <= 1 and self != other
+
+    def is_adjacent(self, other):
+        return (
+            (abs(self.x - other.x) == 1 and self.y == other.y) or
+            (self.x == other.x and abs(self.y - other.y) == 1)
+        )
 
     def visualize(self, background_img, color):
         """
