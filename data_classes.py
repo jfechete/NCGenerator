@@ -12,11 +12,16 @@ class Paths:
         self._path_list = path_list
 
     @staticmethod
-    def paths_from_points(points, min_path_length = 2):
+    def paths_from_points(points, min_path_length=2):
         """
         Creates a Paths that goes through neighboring points.
         It creates Path objects until every neighbor has been connected.
-        Also accepts a min_path_length parameter that must be at least 2. Any paths smaller than this are not added. This is used because sometimes 2 Path objects can get close to each other, but never actually connect, so many small Path objects are created to connect them, which may not be desirable since the difference may not be noticeable but add more CNC cutting time.
+        Also accepts a min_path_length parameter that must be at least 2,
+        any paths smaller than this are not added.
+        This is used because sometimes 2 Path objects can get close to each
+        other, but never actually connect, so many small Path objects are
+        created to connect them, which may not be desirable since the
+        difference may not be noticeable but add more CNC cutting time.
         """
         if min_path_length < 2:
             raise ValueError("Parameter min_path_length must be at least 2")
@@ -28,57 +33,78 @@ class Paths:
                 continue
 
             #explore current Point in Points
-            path, cur_expandable, cur_unexpandable = Path.path_from_points(
-                points, start_point = point,
-                explored_paths = paths, allow_loop = True,
-                return_affected_points = True
+            path, cr_expandable, cr_unexpandable = Path.path_from_points(
+                points, start_point=point,
+                explored_paths=paths, allow_loop=True,
+                return_affected_points=True
             )
             if len(path) > 1:
                 paths.add_path(path)
-            unexpandable_points += [p for p in cur_unexpandable if p not in unexpandable_points]
-            expandable_points = [p for p in cur_expandable if p not in unexpandable_points]
+            unexpandable_points += [
+                p for p in cr_unexpandable if p not in unexpandable_points
+            ]
+            expandable_points = [
+                p for p in cr_expandable if p not in unexpandable_points
+            ]
 
             #explore any possible branches from that point
             while len(expandable_points) > 0:
-                cur_point = expandable_points.pop(0)
-                path, cur_expandable, cur_unexpandable = Path.path_from_points(
-                    points, start_point = cur_point,
-                    explored_paths = paths, allow_loop = True,
-                    return_affected_points = True
+                cr_point = expandable_points.pop(0)
+                path, cr_expandable, cr_unexpandable = Path.path_from_points(
+                    points, start_point=cr_point,
+                    explored_paths=paths, allow_loop=True,
+                    return_affected_points=True
                 )
                 if len(path) > 1:
                     paths.add_path(path)
-                unexpandable_points += [p for p in cur_unexpandable if p not in unexpandable_points]
-                expandable_points += [p for p in cur_expandable if p not in expandable_points]
-                expandable_points = [p for p in expandable_points if p not in unexpandable_points]
+                unexpandable_points += [
+                    p for p in cr_unexpandable if p not in unexpandable_points
+                ]
+                expandable_points += [
+                    p for p in cr_expandable if p not in expandable_points
+                ]
+                expandable_points = [
+                    p for p in expandable_points
+                    if p not in unexpandable_points
+                ]
 
-        #need to filter at the end so that if a connection was found in a small Path, it doesn't infinite loop for not saving that Path
-        paths = Paths([path for path in paths if len(path) >= min_path_length])
+        #need to filter at the end
+        #that way if a connection was found in a small Path,
+        #it doesn't infinite loop for not saving that Path
+        paths = Paths(
+            [path for path in paths if len(path) >= min_path_length]
+        )
         return paths
 
     def compress(self, **kwargs):
         for path in self._path_list:
             path.compress(**kwargs)
 
-    def visualize(self, background_img, line_color, start_color = None):
+    def visualize(self, background_img, line_color, start_color=None):
         """
         Shows the background image with an animated .gif showing the paths.
-        Also saves to a file that isn't deleted, because showing an animated .gif doesn't seem to show the animation.
+        Also saves to a file that isn't deleted,
+        because showing an animated .gif doesn't seem to show the animation.
         """
         background_img = background_img.copy()
         imgs = self.apply_to_img(background_img, line_color, start_color)
-        imgs[0].save(TEMP_GIF_FILE, save_all=True, append_images=imgs[1:], duration=1000/GIF_FPS, loop=0)
+        imgs[0].save(
+            TEMP_GIF_FILE, save_all=True, append_images=imgs[1:],
+            duration=1000/GIF_FPS, loop=0
+        )
         anim_img = Image.open(TEMP_GIF_FILE)
         anim_img.show()
 
-    def apply_to_img(self, background_img, line_color, start_color = None):
+    def apply_to_img(self, background_img, line_color, start_color=None):
         """
         Applies the paths to the picture using the color parameters.
         Also returns a list of frames for animation purposes.
         """
         frames = []
         for path in self:
-            frames += path.apply_to_img(background_img, line_color, start_color)
+            frames += path.apply_to_img(
+                background_img, line_color, start_color
+            )
         return frames
 
     def add_path(self, path):
@@ -87,7 +113,7 @@ class Paths:
         """
         self._path_list.append(path)
 
-    def has_connection(self, point_a, point_b, max_dist = 1):
+    def has_connection(self, point_a, point_b, max_dist=1):
         for path in self:
             if path.has_connection(point_a, point_b, max_dist):
                 return True
@@ -103,9 +129,13 @@ class Points:
     @staticmethod
     def from_image_color_edge(pil_img):
         """
-        Returns a Points object showing the outline all color edges in the image.
+        Returns a Points object showing the outline
+        of all color edges in the image.
         The border is on the side with the brighter color.
-        In order to get the brighter color, the image is converted to grayscale. If two color convert to the same grayscale color, edges won't be detected.
+        In order to get the brighter color,
+        the image is converted to grayscale.
+        If two colors convert to the same grayscale color,
+        edges won't be detected.
         """
         if pil_img.mode != "L":
             pil_img = pil_img.convert("L")
@@ -132,7 +162,8 @@ class Points:
 
     def visualize(self, background_img, color):
         """"
-        Shows the background image but with every point added to it using the color parameter.
+        Shows the background image,
+        but with every point added to it using the color parameter.
         """
         background_img = background_img.copy()
         self.apply_to_img(background_img, color)
@@ -159,15 +190,31 @@ class Path:
         self._point_list = point_list
 
     @staticmethod
-    def path_from_points(points, start_point = None, explored_paths = None, allow_loop = False, return_affected_points = False):
+    def path_from_points(
+        points, start_point=None, explored_paths=None,
+        allow_loop=False, return_affected_points=False
+    ):
         """
         Creates a path that goes through neighboring points.
-        It simply chooses the first available neighbor repeatedly to create a list.
+        It simply chooses the first available neighbor repeatedly to create
+        a list.
         It does not guarentee that every point will be crossed by the path.
-        An optional start_point parameter can be given to define the start point, if not the first will be used.
-        Also accepts an optional explore_path parameter which should be a Paths objects. It will prevent making any connections that are already present in one of these paths.
-        Also can set allow_loop to True to allow it to end on the same point it started if that's where the path ends up.
-        Also can set return_affected_points to True, which means that along with the Path object it will return 2 Points showing all the points in the path. The first shows Point objects that still have unexplored neighbors, while the second shows Point objects that have no unexplored neighbors. Not 100% reliable, as if a point has an unexplored neighbor that is explored later in the path, it will not be moved to the second list.
+        An optional start_point parameter can be given to define the
+        start point, if not the first will be used.
+        Also accepts an optional explore_path parameter,
+        which should be a Paths objects.
+        It will prevent making any connections that are already present
+        in one of these paths.
+        Also can set allow_loop to True to allow it to end on the same point
+        it started if that's where the path ends up.
+        Also can set return_affected_points to True,
+        which means that along with the Path object it will return 2 Points
+        showing all the points in the path.
+        The first shows Point objects that still have unexplored neighbors,
+        while the second shows Point objects that have no unexplored
+        neighbors.
+        Not 100% reliable, as if a point has an unexplored neighbor that is
+        explored later in the path, it will not be moved to the second list.
         """
         if start_point == None:
             start_point = list(points)[0]
@@ -184,9 +231,15 @@ class Path:
                 if (
                     path[-1].is_neighbor(point_exploring) and
                     point_exploring not in path and
-                    # allows distance of 2 so that corners don't connect both the corner piece and diagonal connection.
-                    (explored_paths == None or not explored_paths.has_connection(path[-1], point_exploring, 2))
-                    ):
+                    #allows distance of 2 so that corners don't connect
+                    #both the corner piece and diagonal connection.
+                    (
+                        explored_paths == None or
+                        not explored_paths.has_connection(
+                            path[-1], point_exploring, 2
+                        )
+                    )
+                ):
                     if path[-1].is_adjacent(point_exploring):
                         adjacents.append(point_exploring)
                         if not return_affected_points:
@@ -194,7 +247,8 @@ class Path:
                     else:
                         neighbors.append(point_exploring)
 
-            #prioritize adjacent cells to avoid path skipping corners and leaving single points behind
+            #prioritize adjacent cells to avoid path skipping corners
+            #and leaving single points behind
             if len(adjacents) > 0:
                 path.append(adjacents.pop())
             elif len(neighbors) > 0:
@@ -214,11 +268,15 @@ class Path:
                 path.append(start_point)
 
         if return_affected_points:
-            return Path(path), Points(expandable_points), Points(unexpandable_points)
+            return (
+                Path(path),
+                Points(expandable_points),
+                Points(unexpandable_points)
+            )
         else:
             return Path(path)
 
-    def compress(self, max_dist = 1):
+    def compress(self, max_dist=1):
         max_dist_sqr = max_dist**2
         point_on = 1
         segment_removing = []
@@ -258,14 +316,18 @@ class Path:
                 point_on += 1
                 segment_removing.clear()
 
-    def visualize(self, background_img, line_color, start_color = None):
+    def visualize(self, background_img, line_color, start_color=None):
         """
         Shows the background image with an animated .gif showing the path.
-        Also saves to a file that isn't deleted, because showing an animated .gif doesn't seem to show the animation.
+        Also saves to a file that isn't deleted,
+        because showing an animated .gif doesn't seem to show the animation.
         """
         background_img = background_img.copy()
         imgs = self.apply_to_img(background_img, line_color, start_color)
-        imgs[0].save(TEMP_GIF_FILE, save_all=True, append_images=imgs[1:], duration=1000/GIF_FPS, loop=0)
+        imgs[0].save(
+            TEMP_GIF_FILE, save_all=True, append_images=imgs[1:],
+            duration=1000/GIF_FPS, loop=0
+        )
         anim_img = Image.open(TEMP_GIF_FILE)
         anim_img.show()
 
@@ -290,14 +352,27 @@ class Path:
     def get_first_point(self):
         return self._point_list[0]
 
-    def has_connection(self, point_a, point_b, max_dist = 1):
+    def has_connection(self, point_a, point_b, max_dist=1):
         for i in range(len(self._point_list)):
-            if self._point_list[i] == point_a or self._point_list[i] == point_b:
+            if (
+                self._point_list[i] == point_a or
+                self._point_list[i] == point_b
+            ):
                 for j in range(1, max_dist + 1):
                     if (
-                        (self._point_list[i] == point_a and self._point_list[(i+j)%len(self._point_list)] == point_b) or
-                        (self._point_list[i] == point_b and self._point_list[(i+j)%len(self._point_list)] == point_a)
-                        ):
+                        (
+                            self._point_list[i] == point_a and
+                            self._point_list[
+                                (i+j)%len(self._point_list)
+                            ] == point_b
+                        ) or
+                        (
+                            self._point_list[i] == point_b and
+                            self._point_list[
+                                (i+j)%len(self._point_list)
+                            ] == point_a
+                        )
+                    ):
                         return True
         return False
 
@@ -318,7 +393,11 @@ class Point:
         self.y = y
 
     def is_neighbor(self, other):
-        return abs(self.x - other.x) <= 1 and abs(self.y - other.y) <= 1 and self != other
+        return (
+            abs(self.x - other.x) <= 1 and
+            abs(self.y - other.y) <= 1 and
+            self != other
+        )
 
     def is_adjacent(self, other):
         return (
@@ -328,7 +407,8 @@ class Point:
 
     def visualize(self, background_img, color):
         """
-        Shows the background image but with the point added to it using the color parameter.
+        Shows the background image,
+        but with the point added to it using the color parameter.
         """
         background_img = background_img.copy()
         self.apply_to_img(background_img, color)
@@ -345,10 +425,14 @@ class Point:
             draw.ellipse((
                 self.x+1-DOT_PIXEL_SIZE, self.y+1-DOT_PIXEL_SIZE,
                 self.x-1+DOT_PIXEL_SIZE, self.y-1+DOT_PIXEL_SIZE
-            ), fill = color)
+            ), fill=color)
 
     def __eq__(self, other):
-        return isinstance(other, Point) and self.x == other.x and self.y == other.y
+        return (
+            isinstance(other, Point) and
+            self.x == other.x and
+            self.y == other.y
+        )
 
     def __ne__(self, other):
         return not self.__eq__(other)
