@@ -56,6 +56,10 @@ class Paths:
         paths = Paths([path for path in paths if len(path) >= min_path_length])
         return paths
 
+    def compress(self, **kwargs):
+        for path in self._path_list:
+            path.compress(**kwargs)
+
     def visualize(self, background_img, line_color, start_color = None):
         """
         Shows the background image with an animated .gif showing the paths.
@@ -167,7 +171,7 @@ class Path:
         """
         if start_point == None:
             start_point = list(points)[0]
-        
+
         path = [start_point]
         found_connection = True
         if return_affected_points:
@@ -213,6 +217,46 @@ class Path:
             return Path(path), Points(expandable_points), Points(unexpandable_points)
         else:
             return Path(path)
+
+    def compress(self, max_dist = 1):
+        max_dist_sqr = max_dist**2
+        point_on = 1
+        segment_removing = []
+        while point_on < len(self._point_list) - 1:
+            remove_safe = True
+            segment_removing.append(self._point_list[point_on])
+            #constructing standard line equation
+            a = self._point_list[point_on-1].y-self._point_list[point_on+1].y
+            b = self._point_list[point_on+1].x-self._point_list[point_on-1].x
+            c = -(
+                a*self._point_list[point_on-1].x +
+                b*self._point_list[point_on-1].y
+            )
+            for point_check in segment_removing:
+                if a == 0 and b == 0:
+                    #getting distance from point
+                    dist_sqr = (
+                        (self._point_list[point_on-1].x - point_check.x)**2 +
+                        (self._point_list[point_on-1].y - point_check.y)**2
+                    )
+                else:
+                    #getting distance from line
+                    dist_sqr = (
+                        a*point_check.x +
+                        b*point_check.y +
+                        c
+                    )**2
+                    dist_sqr /= a**2 + b**2
+                #checking if too far
+                if dist_sqr > max_dist_sqr:
+                    remove_safe = False
+                    break
+            #deleting point if all in segment close enough
+            if remove_safe:
+                del self._point_list[point_on]
+            else:
+                point_on += 1
+                segment_removing.clear()
 
     def visualize(self, background_img, line_color, start_color = None):
         """
