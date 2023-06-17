@@ -151,13 +151,74 @@ class Points:
                     (x, y-1)
                 )
                 for neigh in neighs:
-                    if (neigh[0] >= 0 and neigh[0] < pil_img.width and
-                        neigh[1] >= 0 and neigh[1] < pil_img.height):
+                    if (
+                        neigh[0] >= 0 and neigh[0] < pil_img.width and
+                        neigh[1] >= 0 and neigh[1] < pil_img.height
+                    ):
                         neigh_color = pil_img.getpixel(neigh)
                         if neigh_color < color:
                             point_list.append(Point(x, y))
                             break
 
+        return Points(point_list)
+
+    @staticmethod
+    def from_image_trace(pil_img):
+        """
+        Returns a points object showing the center of
+        the lines in the image.
+        The image is converted to 1 bit pixels.
+        0 is treated as line, and 255 as background.
+        """
+        if pil_img.mode != "1":
+            pil_img = pil_img.convert("1")
+
+        remove_queue = []
+        #for optimization so doesn't have to search long list
+        remove_queue_dict = {}
+        for x in range(pil_img.width):
+            for y in range(pil_img.height):
+                if (
+                    pil_img.getpixel((x,y)) == 0 and
+                    is_pixel_unneeded(pil_img, (x,y))
+                ):
+                    remove_queue.append((x,y))
+                    remove_queue_dict[(x,y)] = True
+
+        while len(remove_queue) > 0:
+            cr_pixel = remove_queue.pop(0)
+            del remove_queue_dict[cr_pixel]
+            #checking again incase state changed since removing pixels ahead
+            if is_pixel_unneeded(pil_img, cr_pixel):
+                pil_img.putpixel(cr_pixel, 255)
+                neighs = (
+                    (cr_pixel[0], cr_pixel[1]+1),
+                    (cr_pixel[0]+1, cr_pixel[1]+1),
+                    (cr_pixel[0]+1, cr_pixel[1]),
+                    (cr_pixel[0]+1, cr_pixel[1]-1),
+                    (cr_pixel[0], cr_pixel[1]-1),
+                    (cr_pixel[0]-1, cr_pixel[1]-1),
+                    (cr_pixel[0]-1, cr_pixel[1]),
+                    (cr_pixel[0]-1, cr_pixel[1]+1),
+                )
+                for neigh in neighs:
+                    if (
+                        neigh not in remove_queue_dict and
+                        neigh[0] >= 0 and neigh[0] < pil_img.width and
+                        neigh[1] >= 0 and neigh[1] < pil_img.height
+                    ):
+                        if (
+                            pil_img.getpixel(neigh) == 0 and
+                            is_pixel_unneeded(pil_img, neigh)
+                        ):
+                            remove_queue.append(neigh)
+                            remove_queue_dict[neigh] = True
+
+        point_list = []
+        for x in range(pil_img.width):
+            for y in range(pil_img.height):
+                if pil_img.getpixel((x,y)) == 0:
+                    point_list.append(Point(x, y))
         return Points(point_list)
 
     def visualize(self, background_img, color):
@@ -439,3 +500,51 @@ class Point:
 
     def __str__(self):
         return "{}, {}".format(self.x, self.y)
+
+#helper functions
+def is_pixel_unneeded(pil_img, pixel):
+    """
+    Returns if the pixel can be removed without breaking any lines.
+    Assumes pil_img is mode "1".
+    """
+    neighs = (
+        (pixel[0], pixel[1]+1),
+        (pixel[0]+1, pixel[1]+1),
+        (pixel[0]+1, pixel[1]),
+        (pixel[0]+1, pixel[1]-1),
+        (pixel[0], pixel[1]-1),
+        (pixel[0]-1, pixel[1]-1),
+        (pixel[0]-1, pixel[1]),
+        (pixel[0]-1, pixel[1]+1)
+    )
+    neigh_values = []
+    for neigh in neighs:
+        if (
+            neigh[0] < 0 or
+            neigh[0] >= pil_img.width or
+            neigh[1] < 0 or
+            neigh[1] >= pil_img.height
+        ):
+            neigh_values.append(255)
+        else:
+            neigh_values.append(pil_img.getpixel(neigh))
+
+    if neigh_values.count(0) <= 1:
+        #the pixel is either a single point, or the edge of a line
+        return False
+
+    if neigh_values.count(255) <= 1:
+        #inner pixel, should be removed later
+        #I tested with 0 to so that it only removes if no background,
+        #but that can sometimes give bad results
+        return False
+
+    segments = 0
+    for i in range(len(neigh_values)):
+        if neigh_values[i-1] == 0 and neigh_values[i] == 255:
+            segments += 1
+    if segments >= 2:
+        #the pixel connects multiple sides
+        return False
+
+    return True

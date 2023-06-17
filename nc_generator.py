@@ -12,7 +12,7 @@ SIZE = 100
 
 def main():
     image = Image.open(INPUT_FILE)
-    points = data_classes.Points.from_image_color_edge(image)
+    points = data_classes.Points.from_image_trace(image)
 
     paths = data_classes.Paths.paths_from_points(points, min_path_length=7)
     paths.compress()
