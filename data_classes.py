@@ -27,9 +27,9 @@ class Paths:
             raise ValueError("Parameter min_path_length must be at least 2")
         paths = Paths([])
 
-        unexpandable_points = []
+        unexpandable_points = {}
         for point in points:
-            if point in unexpandable_points:
+            if point.to_tuple() in unexpandable_points:
                 continue
 
             #explore current Point in Points
@@ -40,33 +40,8 @@ class Paths:
             )
             if len(path) > 1:
                 paths.add_path(path)
-            unexpandable_points += [
-                p for p in cr_unexpandable if p not in unexpandable_points
-            ]
-            expandable_points = [
-                p for p in cr_expandable if p not in unexpandable_points
-            ]
-
-            #explore any possible branches from that point
-            while len(expandable_points) > 0:
-                cr_point = expandable_points.pop(0)
-                path, cr_expandable, cr_unexpandable = Path.path_from_points(
-                    points, start_point=cr_point,
-                    explored_paths=paths, allow_loop=True,
-                    return_affected_points=True
-                )
-                if len(path) > 1:
-                    paths.add_path(path)
-                unexpandable_points += [
-                    p for p in cr_unexpandable if p not in unexpandable_points
-                ]
-                expandable_points += [
-                    p for p in cr_expandable if p not in expandable_points
-                ]
-                expandable_points = [
-                    p for p in expandable_points
-                    if p not in unexpandable_points
-                ]
+            for point in cr_unexpandable:
+                unexpandable_points[point.to_tuple()] = True
 
         #need to filter at the end
         #that way if a connection was found in a small Path,
@@ -465,6 +440,9 @@ class Point:
             (abs(self.x - other.x) == 1 and self.y == other.y) or
             (self.x == other.x and abs(self.y - other.y) == 1)
         )
+
+    def to_tuple(self):
+        return (self.x, self.y)
 
     def visualize(self, background_img, color):
         """
