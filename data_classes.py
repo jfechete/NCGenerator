@@ -7,12 +7,105 @@ GIF_FPS = 60
 MAX_GIF_LINE_FRAMES = 120
 DOT_PIXEL_SIZE = 5
 
+class Heightmap:
+    def __init__(self, heightmap_list):
+        """
+        For now heightmap should be a 2d list, heightmap[row/y][column/x].
+        Values should be a float from 0 to 1.
+        I chose this since it seems like it would be the easiest to use.
+        This does mean that it isn't possible to omit certain positions.
+        As such, this is not stable and may change in the future.
+        That shouldn't be a problem as most common creation should be using
+        from_image, not the constructor.
+        """
+        self._rows = list(range(len(heightmap_list)))
+        self._columns = list(range(len(heightmap_list[0])))
+        self._heights = {}
+        for y in self._rows:
+            for x in self._columns:
+                self._heights[(x, y)] = heightmap_list[y][x]
+
+    @staticmethod
+    def from_image(pil_img):
+        """
+        Returns a heightmap created from this image.
+        The image is converted to grayscale to create it.
+        """
+        if pil_img.mode != "L":
+            pil_img = pil_img.convert("L")
+
+        heightmap_list = []
+        for y in range(pil_img.height):
+            heightmap_list.append([])
+            for x in range(pil_img.width):
+                color = pil_img.getpixel((x,y))
+                heightmap_list[y].append(color/255)
+
+        return Heightmap(heightmap_list)
+
+    def get_rows(self):
+        """
+        Gets all rows with a value.
+        """
+        return self._rows.copy()
+
+    def get_columns(self):
+        """
+        Gets all columns with a value.
+        """
+        return self._columns.copy()
+
+    def get_row(self, row):
+        """
+        Gets a list of all points along a row.
+        Returns a list of tuples with (x, height).
+        """
+        row_return = []
+        for x in self._columns:
+            if (x, row) in self._heights:
+                row_return .append((x, self._heights[(x,row)]))
+        return row_return
+
+    def get_column(self, column):
+        """
+        Gets a list of all points along a column.
+        Returns a list of tuples with (y, height).
+        """
+        column = []
+        for y in self._rows:
+            if (column, y) in self._heights:
+                row.append((y, self._heights[(column, y)]))
+        return row
+
+    def visualize(self, background_img, color):
+        """"
+        Shows the background image, but with the heightmap added to it.
+        """
+        background_img = background_img.copy()
+        background_img = background_img.convert("RGBA")
+        self.apply_to_img(background_img, color)
+        background_img.show()
+
+    def apply_to_img(self, background_img, color):
+        """
+        Applies the heightmap to the picture using the color parameter.
+        background_img should be mode RGBA.
+        """
+        image_applying = Image.new(
+            "RGBA",
+            (background_img.width, background_img.height)
+        )
+        for y in self.get_rows():
+            for x, value in self.get_row(y):
+                image_applying.putpixel((x,y), color + (int(value*255),))
+        background_img.alpha_composite(image_applying)
+
 class Paths:
     def __init__(self, path_list):
         self._path_list = path_list
 
     @staticmethod
-    def paths_from_points(points, min_path_length=2):
+    def from_points(points, min_path_length=2):
         """
         Creates a Paths that goes through neighboring points.
         It creates Path objects until every neighbor has been connected.
@@ -33,7 +126,7 @@ class Paths:
                 continue
 
             #explore current Point in Points
-            path, cr_expandable, cr_unexpandable = Path.path_from_points(
+            path, cr_expandable, cr_unexpandable = Path.from_points(
                 points, start_point=point,
                 explored_paths=paths, allow_loop=True,
                 return_affected_points=True
@@ -226,7 +319,7 @@ class Path:
         self._point_list = point_list
 
     @staticmethod
-    def path_from_points(
+    def from_points(
         points, start_point=None, explored_paths=None,
         allow_loop=False, return_affected_points=False
     ):
