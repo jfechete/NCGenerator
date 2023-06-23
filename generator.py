@@ -12,11 +12,10 @@ SPINDLE_SPEED = 10000
 HOVER_HEIGHT = 1
 VERTICAL_SPEED = 250
 HORIZONTAL_SPEED = 750
-DEPTH_STEP = 0.5
 FLOAT_PRECISION = 3
 
 class Generator:
-    def __init__(self, mm_ratio, min_move_dist=0):
+    def __init__(self, mm_ratio, bit_size, min_move_dist=0):
         """
         Creates the generator for creating nc files.
         The mm_ratio parameter is how many millimeters per pixel.
@@ -27,55 +26,55 @@ class Generator:
         self._post_code = POST_CODE.format(hover_height=HOVER_HEIGHT)
         self._move_code = ""
         self._mm_ratio = mm_ratio
-        self._min_move_dist = 0
+        self._min_move_dist = min_move_dist
+        self._bit_size = bit_size
 
-    def add_multipass(self, paths, depth, depth_step=DEPTH_STEP):
+    def carve_paths(self, paths, depth, single_pass = False):
         """
-        Creates multiple passes that follows the given Paths object.
-        Each path increases in depth by the depth_step parameter
-        until it reaches the desired depth.
+        Carves along every path in the given Paths object.
+        Set single_pass to true to carve it only at the given depth,
+        without doing smaller increments beforehand.
         """
-        current_depth = 0
-        while current_depth < depth:
-             current_depth += depth_step
-             current_depth = min(current_depth, depth)
-             self.add_pass(paths, current_depth)
-
-    def add_pass(self, paths, depth):
-        """
-        Creates a single pass that follows the given
-        Paths object at the supplied depth.
-        """
+        if depth > self._bit_size/2 and not single_pass:
+            self.carve_paths(paths, depth - self._bit_size/2)
         for path in paths:
-            path_code = "G0 Z{hover_height}\n".format(
-                hover_height=HOVER_HEIGHT
-            )
-            start = path.get_first_point()
-            last_pos = (self._get_mm_pos(start.x), self._get_mm_pos(start.y))
-            path_code += "G0 X{x} Y{y}\n".format(x=last_pos[0],y=last_pos[1])
-            path_code += "G1 Z-{depth} F{speed}\n".format(
-                depth=depth, speed=VERTICAL_SPEED
-            )
-            path_code += "G1 F{speed}\n".format(speed=HORIZONTAL_SPEED)
-            for point in path:
-                cur_pos = (
-                    self._get_mm_pos(point.x),
-                    self._get_mm_pos(point.y)
-                )
-                if self._is_move_far(last_pos, cur_pos):
-                    path_code += "G1 X{x} Y{y}\n".format(
-                        x=cur_pos[0],y=cur_pos[1]
-                    )
-                    last_pos = cur_pos
-            if last_pos != cur_pos:
+            self.carve_path(path, depth, single_pass = True)
+
+    def carve_path(self, path, depth, single_pass = False):
+        """
+        Carves along the given Path object.
+        Set single_pass to true to carve it only at the given depth,
+        without doing smaller increments beforehand.
+        """
+        if depth > self._bit_size/2 and not single_pass:
+            self.carve_path(path, depth - self._bit_size/2)
+
+        path_code = "G0 Z{hover_height}\n".format(
+            hover_height=HOVER_HEIGHT
+        )
+        start = path.get_first_point()
+        last_pos = self._get_mm_pos(start.to_tuple())
+        path_code += "G0 X{x} Y{y}\n".format(x=last_pos[0],y=last_pos[1])
+        path_code += "G1 Z-{depth} F{speed}\n".format(
+            depth=depth, speed=VERTICAL_SPEED
+        )
+        path_code += "G1 F{speed}\n".format(speed=HORIZONTAL_SPEED)
+        for point in path:
+            cur_pos = self._get_mm_pos(point.to_tuple())
+            if self._is_move_far(last_pos, cur_pos):
                 path_code += "G1 X{x} Y{y}\n".format(
                     x=cur_pos[0],y=cur_pos[1]
                 )
-            path_code += "G0 Z{hover_height}\n".format(
-                hover_height=HOVER_HEIGHT
+                last_pos = cur_pos
+        if last_pos != cur_pos:
+            path_code += "G1 X{x} Y{y}\n".format(
+                x=cur_pos[0],y=cur_pos[1]
             )
+        path_code += "G0 Z{hover_height}\n".format(
+            hover_height=HOVER_HEIGHT
+        )
 
-            self._move_code += path_code
+        self._move_code += path_code
 
     def export(self, out_file):
         """
@@ -97,4 +96,12 @@ class Generator:
         )
 
     def _get_mm_pos(self, pixel_pos):
+        if isinstance(pixel_pos, tuple):
+            return tuple(
+                self._get_mm_pos(d) for d in pixel_pos
+            )
+        elif isinstance(pixel_pos, list):
+            return list(
+                self._get_mm_pos(d) for d in pixel_pos
+            )
         return round(pixel_pos* self._mm_ratio, FLOAT_PRECISION)

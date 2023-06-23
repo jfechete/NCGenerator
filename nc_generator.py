@@ -14,11 +14,11 @@ def main():
     image = Image.open(INPUT_FILE)
     points = data_classes.Points.from_image_trace(image)
 
-    paths = data_classes.Paths.paths_from_points(points, min_path_length=7)
+    paths = data_classes.Paths.from_points(points)
     paths.compress()
 
-    nc_generator = generator.Generator(SIZE/max(image.size))
-    nc_generator.add_multipass(paths, DEPTH)
+    nc_generator = generator.Generator(SIZE/max(image.size), 1)
+    nc_generator.carve_paths(paths, DEPTH)
     nc_generator.export(OUTPUT_FILE)
 
 if __name__ == "__main__":
