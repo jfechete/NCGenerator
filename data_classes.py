@@ -71,11 +71,31 @@ class Heightmap:
         Gets a list of all points along a column.
         Returns a list of tuples with (y, height).
         """
-        column = []
+        column_return = []
         for y in self._rows:
             if (column, y) in self._heights:
-                row.append((y, self._heights[(column, y)]))
-        return row
+                column_return.append((y, self._heights[(column, y)]))
+        return column_return
+
+    def get_rows_max(self, rows):
+        """
+        Gets a list of points along multiple rows,
+        where each height will be the maximum for that column across all
+        the given rows.
+        Returns a list of tuples with (x, height).
+        """
+        rows = [self.get_row(row) for row in rows]
+        return Heightmap._maximize_points(rows)
+
+    def get_columns_max(self, columns):
+        """
+        Gets a list of points along multiple columns,
+        where each height will be the maximum for that row across all
+        the given columns.
+        Returns a list of tuples with (y, height).
+        """
+        columns = [self.get_column(column) for column in columns]
+        return Heightmap._maximize_points(columns)
 
     def visualize(self, background_img, color):
         """"
@@ -99,6 +119,19 @@ class Heightmap:
             for x, value in self.get_row(y):
                 image_applying.putpixel((x,y), color + (int(value*255),))
         background_img.alpha_composite(image_applying)
+
+    @staticmethod
+    def _maximize_points(list_of_points):
+        points = sum(list_of_points, [])
+        points.sort()
+        cr_point = 0
+        while cr_point < len(points) - 1:
+            if points[cr_point][0] == points[cr_point + 1][0]:
+                del points[cr_point]
+            else:
+                cr_point += 1
+        return points
+
 
 class Paths:
     def __init__(self, path_list):

@@ -12,13 +12,10 @@ SIZE = 100
 
 def main():
     image = Image.open(INPUT_FILE)
-    points = data_classes.Points.from_image_trace(image)
+    heightmap = data_classes.Heightmap.from_image(image)
 
-    paths = data_classes.Paths.from_points(points)
-    paths.compress()
-
-    nc_generator = generator.Generator(SIZE/max(image.size), 1)
-    nc_generator.carve_paths(paths, DEPTH)
+    nc_generator = generator.Generator(SIZE/max(image.size), 2)
+    nc_generator.carve_heigtmap(heightmap, 0, DEPTH, both_directions=True)
     nc_generator.export(OUTPUT_FILE)
 
 if __name__ == "__main__":
